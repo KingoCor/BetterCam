@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net46</TargetFramework>
     <AssemblyName>BetterCam</AssemblyName>
@@ -33,6 +32,10 @@
 	  </Reference>
 	  <Reference Include="Cinemachine">
 		  <HintPath>Cinemachine.dll</HintPath>
+		  <Private>False</Private>
+	  </Reference>
+	  <Reference Include="Mirror">
+		  <HintPath>Mirror.dll</HintPath>
 		  <Private>False</Private>
 	  </Reference>
   </ItemGroup>

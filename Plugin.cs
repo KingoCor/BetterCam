@@ -1,4 +1,6 @@
-﻿using BepInEx;
+﻿using System.Collections.Generic;
+
+using BepInEx;
 using BepInEx.Logging;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -22,15 +24,15 @@ class PatchCamera {
 		Rigidbody car = __instance.GetTarget();
 
 		Vector3 translation = __instance.transform.position-car.transform.position;
-		float height = translation.y*Plugin.height.Value;
+		float height = translation.y*Plugin.followConfig.height.Value;
 		translation.y = 0;
-		float distance = translation.magnitude*Plugin.distance.Value;
+		float distance = translation.magnitude*Plugin.followConfig.distance.Value;
 		
 		Vector3 carForward = car.transform.forward;
 		Vector3 desiredPosition = car.transform.position - carForward * distance;
 		desiredPosition.y += height;
 
-		__instance.transform.position = Vector3.Lerp(lastPosition,desiredPosition,Plugin.lerpSpeed.Value*deltaTime);
+		__instance.transform.position = Vector3.Lerp(lastPosition,desiredPosition,Plugin.followConfig.speed.Value*deltaTime);
 		__instance.transform.rotation = Quaternion.LookRotation(car.transform.position-__instance.transform.position);
 	}
 
@@ -38,10 +40,19 @@ class PatchCamera {
 		Rigidbody car = __instance.GetTarget();
 
 		Vector3 desiredPosition = car.transform.position;
-		desiredPosition += car.transform.forward*Plugin.distance.Value;
-		desiredPosition += car.transform.up*Plugin.height.Value;
+		desiredPosition += car.transform.forward*Plugin.firstPersonConfig.distance.Value;
+		desiredPosition += car.transform.up*Plugin.firstPersonConfig.height.Value;
 
-		__instance.transform.position = desiredPosition;
+		VehicleDescriptorComponent vdc = car.GetComponentInParent<VehicleDescriptorComponent>();
+        if (vdc!=null) {
+			string vehicleId = vdc.VehicleDescriptor.name;
+
+			desiredPosition += car.transform.forward*Plugin.carsConfigs[vehicleId].distance.Value;
+			desiredPosition += car.transform.up*Plugin.carsConfigs[vehicleId].height.Value;
+			desiredPosition += car.transform.right*Plugin.carsConfigs[vehicleId].sideOffset.Value;
+		}
+
+		__instance.transform.position = Vector3.Lerp(lastPosition,desiredPosition,Plugin.firstPersonConfig.speed.Value*deltaTime);//desiredPosition;
 		__instance.transform.rotation = Quaternion.LookRotation(car.transform.forward);
 	}
 
@@ -59,6 +70,7 @@ class PatchCamera {
 			initialized = true;
 		}
 
+
 		__instance.virtualCamera.m_Lens.NearClipPlane = Plugin.nearClipPlane.Value;
 
 		switch(Plugin.cameraType.Value) {
@@ -75,15 +87,94 @@ class PatchCamera {
 	}
 }
 
+class CameraTypeConfig {
+	public ConfigEntry<float> height;
+	public ConfigEntry<float> distance;
+	public ConfigEntry<float> speed;
+
+	public CameraTypeConfig(ConfigFile config, string name, float defaultHeight, float defaultDistance, float defaultSpeed) {
+		height = config.Bind<float>(
+			name,
+			"height",
+			defaultHeight,
+			new ConfigDescription(
+				"Camera height as a percentage of the standard",
+				new AcceptableValueRange<float>(-10,10)
+			)
+		);
+
+		distance = config.Bind<float>(
+			name,
+			"distance",
+			defaultDistance,
+			new ConfigDescription(
+				"Horizontal distance from the machine to the camera as a percentage of the standard", 
+				new AcceptableValueRange<float>(-10,10)
+			)
+		);
+
+		speed = config.Bind<float>(
+			name,
+			"speed",
+			defaultSpeed,
+			new ConfigDescription(
+				"Camera speed",
+				new AcceptableValueRange<float>(0,100)
+			)
+		);
+	}
+}
+
+class CarTypeConfig {
+	public ConfigEntry<float> height;
+	public ConfigEntry<float> distance;
+	public ConfigEntry<float> sideOffset;
+
+	public CarTypeConfig(ConfigFile config, string name) {
+		height = config.Bind<float>(
+			name,
+			"height",
+			0.0f,
+			new ConfigDescription(
+				"Adds to First Person height",
+				new AcceptableValueRange<float>(-2,2)
+			)
+		);
+
+		distance = config.Bind<float>(
+			name,
+			"distance",
+			0.0f,
+			new ConfigDescription(
+				"Adds to First Person distance", 
+				new AcceptableValueRange<float>(-2,2)
+			)
+		);
+
+		sideOffset = config.Bind<float>(
+			name,
+			"sideOffset",
+			0.0f,
+			new ConfigDescription(
+				"Offset to left or right from car center", 
+				new AcceptableValueRange<float>(-2,2)
+			)
+		);
+
+	}
+}
+
 [BepInPlugin(MyPluginInfo.PLUGIN_GUID, MyPluginInfo.PLUGIN_NAME, MyPluginInfo.PLUGIN_VERSION)]
 public class Plugin : BaseUnityPlugin {
     internal static new ManualLogSource Logger;
 
 	internal static ConfigEntry<CameraType> cameraType;
-	internal static ConfigEntry<float> lerpSpeed;
-	internal static ConfigEntry<float> height;
-	internal static ConfigEntry<float> distance;
 	internal static ConfigEntry<float> nearClipPlane;
+
+	internal static CameraTypeConfig followConfig;
+	internal static CameraTypeConfig firstPersonConfig;
+
+	internal static Dictionary<string, CarTypeConfig> carsConfigs;
 
 	private void BindConfig() {
 		cameraType = Config.Bind<CameraType>(
@@ -93,42 +184,25 @@ public class Plugin : BaseUnityPlugin {
 			"Тип камеры"
 		);
 
-		lerpSpeed = Config.Bind<float>(
-			"General",
-			"camSpeed",
-			2.0f,
-			new ConfigDescription(
-				"Camera speed",
-				new AcceptableValueRange<float>(0,100)
-			)
-		);
-
-		height = Config.Bind<float>(
-			"General",
-			"height",
-			1.00f,
-			new ConfigDescription(
-				"Camera height as a percentage of the standard",
-				new AcceptableValueRange<float>(-10,10)
-			)
-		);
-
-		distance = Config.Bind<float>(
-			"General",
-			"distance",
-			1.00f,
-			new ConfigDescription(
-				"Horizontal distance from the machine to the camera as a percentage of the standard", 
-				new AcceptableValueRange<float>(-10,10)
-			)
-		);
-
 		nearClipPlane = Config.Bind<float>(
 			"General",
 			"nearClipPlane",
 			1,
 			new ConfigDescription("Near clip plane", new AcceptableValueRange<float>(0,20))
 		);
+
+		followConfig = new CameraTypeConfig(Config, "Follow", 1.0f, 1.0f, 2.0f);
+		firstPersonConfig = new CameraTypeConfig(Config, "First Person", 0.0f, 0.0f, 100.0f);
+
+		carsConfigs = new Dictionary<string, CarTypeConfig>();
+
+		VehicleDescriptor[] allVehicles = VehicleDescriptors.All;
+        if (allVehicles == null) return;
+
+        foreach (var vehicle in allVehicles) {
+            string vehicleId = vehicle.name;
+            carsConfigs[vehicleId] = new CarTypeConfig(Config, vehicleId);
+        }
 	}
         
     private void Awake() {

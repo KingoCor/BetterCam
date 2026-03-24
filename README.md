@@ -7,7 +7,7 @@
 
 # Building
 
-1. Place `Assembly-CSharp.dll` and `Cinemachine.dll` in the root folder of the project.
+1. Place `Assembly-CSharp.dll`, `Cinemachine.dll` and `Mirror.dll` in the root folder of the project.
 2. Initialize the project:
  ```bash
  dotnet restore

@@ -2,4 +2,5 @@ bin
 obj
 Assembly-CSharp.dll
 Cinemachine.dll
+Mirror.dll
 cp_plugin.sh
