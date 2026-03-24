@@ -1,0 +1,5 @@
+bin
+obj
+Assembly-CSharp.dll
+Cinemachine.dll
+cp_plugin.sh
