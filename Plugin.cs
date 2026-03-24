@@ -12,6 +12,7 @@ namespace BetterCam;
 public enum CameraType {
     Default,
     Follow,
+	Chase,
 	FirstPerson
 }
 
@@ -28,8 +29,7 @@ class PatchCamera {
 		translation.y = 0;
 		float distance = translation.magnitude*Plugin.followConfig.distance.Value;
 		
-		Vector3 carForward = car.transform.forward;
-		Vector3 desiredPosition = car.transform.position - carForward * distance;
+		Vector3 desiredPosition = car.transform.position-car.transform.forward*distance;
 		desiredPosition.y += height;
 
 		__instance.transform.position = Vector3.Lerp(lastPosition,desiredPosition,Plugin.followConfig.speed.Value*deltaTime);
@@ -56,6 +56,20 @@ class PatchCamera {
 		__instance.transform.rotation = Quaternion.LookRotation(car.transform.forward);
 	}
 
+	static void CameraChase(CircuitSuperstars.PlayerVehicleCamera __instance, float deltaTime) {
+		Rigidbody car = __instance.GetTarget();
+
+		Vector3 desiredPosition = car.transform.position;
+		desiredPosition -= car.transform.forward*Plugin.chaseConfig.distance.Value;
+		desiredPosition += car.transform.up*Plugin.chaseConfig.height.Value;
+
+		__instance.transform.position = Vector3.Lerp(lastPosition,desiredPosition,Plugin.chaseConfig.speed.Value*deltaTime);
+		
+		Vector3 lookAt = car.transform.position-__instance.transform.position;
+		lookAt.y = 0;
+
+		__instance.transform.rotation = Quaternion.LookRotation(lookAt);
+	}
 
 	[HarmonyPatch(typeof(CircuitSuperstars.PlayerVehicleCamera), nameof(CircuitSuperstars.PlayerVehicleCamera.PositionCamera))]
 	[HarmonyPostfix]
@@ -70,13 +84,15 @@ class PatchCamera {
 			initialized = true;
 		}
 
-
 		__instance.virtualCamera.m_Lens.NearClipPlane = Plugin.nearClipPlane.Value;
 
 		switch(Plugin.cameraType.Value) {
 			case CameraType.Default: return;
 			case CameraType.Follow: 
 				CameraFollow(__instance, deltaTime);
+				break;
+			case CameraType.Chase:
+				CameraChase(__instance, deltaTime);
 				break;
 			case CameraType.FirstPerson:
 				CameraFirstPeson(__instance, deltaTime);
@@ -172,6 +188,7 @@ public class Plugin : BaseUnityPlugin {
 	internal static ConfigEntry<float> nearClipPlane;
 
 	internal static CameraTypeConfig followConfig;
+	internal static CameraTypeConfig chaseConfig;
 	internal static CameraTypeConfig firstPersonConfig;
 
 	internal static Dictionary<string, CarTypeConfig> carsConfigs;
@@ -181,7 +198,7 @@ public class Plugin : BaseUnityPlugin {
 			"General",
 			"cameraType",
 			CameraType.Follow,
-			"Тип камеры"
+			"Camera type"
 		);
 
 		nearClipPlane = Config.Bind<float>(
@@ -192,6 +209,7 @@ public class Plugin : BaseUnityPlugin {
 		);
 
 		followConfig = new CameraTypeConfig(Config, "Follow", 1.0f, 1.0f, 2.0f);
+		chaseConfig = new CameraTypeConfig(Config, "Chase", 2.0f, 8.0f, 10.0f);
 		firstPersonConfig = new CameraTypeConfig(Config, "First Person", 0.0f, 0.0f, 100.0f);
 
 		carsConfigs = new Dictionary<string, CarTypeConfig>();
